@@ -19,7 +19,7 @@ public class Player implements pppp.sim.Player {
 
     private Point[][] prevPiperPos;
     private Move[][] piperVel;
-
+    private HashMap<Double, Point> closest_rats =  new HashMap<Double, Point>();
     private PlayerState[] states;
 
     private interface PlayerState {
@@ -42,7 +42,7 @@ public class Player implements pppp.sim.Player {
 
         @Override
         public Move computeMove(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
-            return move(piperPos[id][pidx], dest, playing);
+        	return move(piperPos[id][pidx], dest, playing);
         }
 
         @Override
@@ -53,6 +53,19 @@ public class Player implements pppp.sim.Player {
         @Override
         public String toString() {
             return getClass().getCanonicalName() + " dest: " + dest.x + ", " + dest.y;
+        }
+        
+        public void get_closest_rats(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos)
+        {
+            ArrayList<Double> distances = new ArrayList<Double>();
+            for(int r = 0; r < ratPos.length; r++)
+            {
+            	double distance = piperPos[id][pidx].distance(ratPos[r]);
+            	closest_rats.put(distance, ratPos[r]);
+            	distances.add(distance);
+            }
+            Collections.sort(distances);
+            this.dest = new Point(closest_rats.get(distances.get(pidx)).y, 0);
         }
     }
 
@@ -74,9 +87,7 @@ public class Player implements pppp.sim.Player {
         }
 
         public boolean stateComplete(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
-            int max_pidx = piperPos[id].length;
-
-            this.dest = new Point(side * ((pidx + 1) * 1.0 / (max_pidx + 1)) - side / 2, 0);
+            super.get_closest_rats(pidx, piperPos, piperVel, pipers_played, ratPos);
             boolean atLoc = super.stateComplete(pidx, piperPos, piperVel, pipers_played, ratPos);
             return atLoc;
         }
@@ -110,7 +121,7 @@ public class Player implements pppp.sim.Player {
 
     private class DepositState extends GoToLocationState {
         // max rat distance divided by max rat speed
-        private static final double MAX_WAIT_TICKS = 10 / 0.1;
+        private static final double MAX_WAIT_TICKS = 10 / 0.02;
 
         private long startTick;
         private int numRatsAtLastCheck;
