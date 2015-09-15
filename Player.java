@@ -63,14 +63,50 @@ public class Player implements pppp.sim.Player {
 
         @Override
         public PlayerState nextState() {
-            return new GoToLocationState(new Point(0, 0), false) {
+            return new SweepState();
+        }
+    }
+
+    private class SweepState extends GoToLocationState {
+
+        public SweepState() {
+            super(new Point(0, 0), false);
+        }
+
+        public boolean stateComplete(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
+            int max_pidx = piperPos[id].length;
+
+            this.dest = new Point(side * ((pidx + 1) * 1.0 / (max_pidx + 1)) - side / 2, 0);
+            boolean atLoc = super.stateComplete(pidx, piperPos, piperVel, pipers_played, ratPos);
+            return atLoc;
+        }
+
+        @Override
+        public PlayerState nextState() {
+            return new PlayerState() {
                 @Override
                 public PlayerState nextState() {
                     return new DepositState();
                 }
+
+                @Override
+                public Move computeMove(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
+                    return new Move(0, 0.1, true);
+                }
+
+                @Override
+                public boolean stateComplete(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
+                    return side / 2 - piperPos[id][pidx].y < 10;
+                }
+
+                @Override
+                public String toString() {
+                    return "Moving up state";
+                }
             };
         }
     }
+
 
     private class DepositState extends GoToLocationState {
         // max rat distance divided by max rat speed
