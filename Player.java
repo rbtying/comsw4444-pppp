@@ -13,11 +13,130 @@ public class Player implements pppp.sim.Player {
     private boolean neg_x;
     private boolean neg_y;
     private boolean swap_xy;
+    private long tick;
 
     private Random gen = new Random();
 
     private Point[][] prevPiperPos;
     private Move[][] piperVel;
+
+    private PlayerState[] states;
+
+    private interface PlayerState {
+        public abstract PlayerState nextState();
+
+        public abstract Move computeMove(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos);
+
+        public abstract boolean stateComplete(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos);
+    }
+
+    private abstract class GoToLocationState implements PlayerState {
+        private static final double TOLERANCE = 0.05;
+        public Point dest;
+        public boolean playing;
+
+        public GoToLocationState(Point dest, boolean playing) {
+            this.dest = dest;
+            this.playing = playing;
+        }
+
+        @Override
+        public Move computeMove(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
+            return move(piperPos[id][pidx], dest, playing);
+        }
+
+        @Override
+        public boolean stateComplete(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
+            return piperPos[id][pidx].distance(dest) < TOLERANCE;
+        }
+
+        @Override
+        public String toString() {
+            return getClass().getCanonicalName() + " dest: " + dest.x + ", " + dest.y;
+        }
+    }
+
+    private class DoorState extends GoToLocationState {
+        public DoorState() {
+            super(new Point(0, side / 2), false);
+        }
+
+        @Override
+        public PlayerState nextState() {
+            return new GoToLocationState(new Point(0, 0), false) {
+                @Override
+                public PlayerState nextState() {
+                    return new DepositState();
+                }
+            };
+        }
+    }
+
+    private class DepositState extends GoToLocationState {
+        // max rat distance divided by max rat speed
+        private static final double MAX_WAIT_TICKS = 10 / 0.1;
+
+        private long startTick;
+        private int numRatsAtLastCheck;
+
+        public DepositState() {
+            super(new Point(0, side / 2 + 2.1), true);
+            this.startTick = -1;
+            this.numRatsAtLastCheck = -1;
+        }
+
+        @Override
+        public boolean stateComplete(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
+            boolean atLoc =  super.stateComplete(pidx, piperPos, piperVel, pipers_played, ratPos);
+
+            if (!atLoc) {
+                return false;
+            }
+
+            // we're at location now
+            if (startTick == -1) {
+                startTick = tick;
+            }
+
+            if (tick - startTick > MAX_WAIT_TICKS) {
+                // bail out if it takes too long
+                return true;
+            }
+
+            List<Integer> rats = getIndicesWithinDistance(piperPos[id][pidx], ratPos, 10);
+
+            this.numRatsAtLastCheck = rats.size();
+
+            return rats.isEmpty();
+        }
+
+        @Override
+        public PlayerState nextState() {
+            return new DoorState();
+        }
+
+        @Override
+        public String toString() {
+            return this.getClass().getCanonicalName() + " num rats: " + numRatsAtLastCheck + " time remaining: " + (MAX_WAIT_TICKS - (tick - startTick));
+        }
+    }
+
+    /**
+     * Finds indices of points within a given distance
+     * @param pos the position to compute from
+     * @param otherPos the array of other positions
+     * @param distance the maximum distance to compare
+     * @return list of indices of points within distance.
+     */
+    private List<Integer> getIndicesWithinDistance(Point pos, Point[] otherPos, double distance) {
+        List<Integer> indices = new LinkedList<Integer>();
+        for (int i = 0; i < otherPos.length; ++i) {
+            if (otherPos[i] != null && pos.distance(otherPos[i]) < distance) {
+                indices.add(i);
+            }
+        }
+        return indices;
+    }
 
 
     /**
@@ -49,6 +168,16 @@ public class Player implements pppp.sim.Player {
         return swap_xy ? new Move(-dy, -dx, m.play) : new Move(dx, dy, m.play);
     }
 
+    /**
+     * Constrains point to within boundaries of walls
+     *
+     * @param p point to constrain
+     * @return constrained point (potentially the same point)
+     */
+    private Point constrainPoint(Point p) {
+        return p;
+    }
+
     // create move towards specified destination
     private static Move move(Point src, Point dst, boolean play) {
         double dx = dst.x - src.x;
@@ -65,6 +194,7 @@ public class Player implements pppp.sim.Player {
     // specify location that the player will alternate between
     public void init(int id, int side, long turns,
                      Point[][] pipers, Point[] rats) {
+        this.tick = 0;
         this.id = id;
         this.side = side;
         this.neg_y = id == 2 || id == 1;
@@ -80,11 +210,18 @@ public class Player implements pppp.sim.Player {
                 this.piperVel[pid][p] = new Move(0, 0, false);
             }
         }
+
+        this.states = new PlayerState[pipers.length];
+        for (int i = 0; i < pipers.length; ++i) {
+            this.states[i] = new DoorState();
+        }
     }
 
     // return next locations on last argument
     public void play(Point[][] pipers, boolean[][] pipers_played,
                      Point[] rats, Move[] moves) {
+        // increment tick
+        ++tick;
 
         // transform coordinates
         Point transformedPiperPos[][] = new Point[pipers.length][pipers[0].length];
@@ -100,6 +237,10 @@ public class Player implements pppp.sim.Player {
             }
         }
 
+        for (int r = 0; r < rats.length; ++r) {
+            transformedRatPos[r] = transformPoint(rats[r]);
+        }
+
         // perform computation
         Move m[] = play_transformed(id, side, transformedPiperPos, piperVel, pipers_played, transformedRatPos);
 
@@ -109,14 +250,19 @@ public class Player implements pppp.sim.Player {
         }
     }
 
-    private static Move[] play_transformed(int id, int side, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
+    private Move[] play_transformed(int id, int side, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
         // THE ENEMIES GATE IS DOWN!!!
-        Point door = new Point(0, side / 2);
-
         Move m[] = new Move[piperPos[id].length];
+
+        // state machine
         for (int p = 0; p < piperPos[id].length; ++p) {
-            // m[p] = new Move(-1, 0, false);
-            m[p] = move(piperPos[id][p], door, false);
+            //m[p] = new Move(0, -1, false);
+            if (states[p].stateComplete(p, piperPos, piperVel, pipers_played, ratPos)) {
+                System.out.print("transitioning piper " + p + " out of state " + states[p]);
+                states[p] = states[p].nextState();
+                System.out.println(" and into " +  states[p]);
+            }
+            m[p] = states[p].computeMove(p, piperPos, piperVel, pipers_played, ratPos);
         }
         return m;
     }
