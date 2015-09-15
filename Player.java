@@ -19,11 +19,11 @@ public class Player implements pppp.sim.Player {
 
     private Point[][] prevPiperPos;
     private Move[][] piperVel;
-    private HashMap<Double, Point> closest_rats =  new HashMap<Double, Point>();
+    private Point closest_rat;
     private PlayerState[] states;
 
     private interface PlayerState {
-        public abstract PlayerState nextState();
+        public abstract PlayerState nextState(int pidx);
 
         public abstract Move computeMove(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos);
 
@@ -31,7 +31,7 @@ public class Player implements pppp.sim.Player {
     }
 
     private abstract class GoToLocationState implements PlayerState {
-        private static final double TOLERANCE = 0.05;
+        public static final double TOLERANCE = 0.05;
         public Point dest;
         public boolean playing;
 
@@ -55,18 +55,6 @@ public class Player implements pppp.sim.Player {
             return getClass().getCanonicalName() + " dest: " + dest.x + ", " + dest.y;
         }
         
-        public void get_closest_rats(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos)
-        {
-            ArrayList<Double> distances = new ArrayList<Double>();
-            for(int r = 0; r < ratPos.length; r++)
-            {
-            	double distance = piperPos[id][pidx].distance(ratPos[r]);
-            	closest_rats.put(distance, ratPos[r]);
-            	distances.add(distance);
-            }
-            Collections.sort(distances);
-            this.dest = new Point(closest_rats.get(distances.get(pidx)).y, 0);
-        }
     }
 
     private class DoorState extends GoToLocationState {
@@ -75,39 +63,40 @@ public class Player implements pppp.sim.Player {
         }
 
         @Override
-        public PlayerState nextState() {
-            return new SweepState();
+        public PlayerState nextState(int pidx) {
+            return new SweepState(closest_rat);
         }
     }
 
     private class SweepState extends GoToLocationState {
 
-        public SweepState() {
-            super(new Point(0, 0), false);
+        public SweepState(Point destination) {
+            super(destination, false);
         }
 
         public boolean stateComplete(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
-            super.get_closest_rats(pidx, piperPos, piperVel, pipers_played, ratPos);
-            boolean atLoc = super.stateComplete(pidx, piperPos, piperVel, pipers_played, ratPos);
+        	boolean atLoc = super.stateComplete(pidx, piperPos, piperVel, pipers_played, ratPos);
             return atLoc;
         }
 
         @Override
-        public PlayerState nextState() {
+        public PlayerState nextState(int pidx) {
             return new PlayerState() {
                 @Override
-                public PlayerState nextState() {
+                public PlayerState nextState(int pidx) {
                     return new DepositState();
                 }
 
                 @Override
                 public Move computeMove(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
-                    return new Move(0, 0.1, true);
+                    return new Move(0- piperPos[id][pidx].x, side/2 - piperPos[id][pidx].y , true);
                 }
 
                 @Override
                 public boolean stateComplete(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
-                    return side / 2 - piperPos[id][pidx].y < 10;
+                    Point piper_position = piperPos[id][pidx];
+                    Point target_position = new Point(0, side/2);
+                	return piper_position.distance(target_position) < TOLERANCE;
                 }
 
                 @Override
@@ -118,10 +107,9 @@ public class Player implements pppp.sim.Player {
         }
     }
 
-
     private class DepositState extends GoToLocationState {
         // max rat distance divided by max rat speed
-        private static final double MAX_WAIT_TICKS = 10 / 0.02;
+        private static final double MAX_WAIT_TICKS = 10 / 0.01;
 
         private long startTick;
         private int numRatsAtLastCheck;
@@ -129,7 +117,7 @@ public class Player implements pppp.sim.Player {
         public DepositState() {
             super(new Point(0, side / 2 + 2.1), true);
             this.startTick = -1;
-            this.numRatsAtLastCheck = -1;
+            this.numRatsAtLastCheck = 0;
         }
 
         @Override
@@ -140,14 +128,14 @@ public class Player implements pppp.sim.Player {
                 return false;
             }
 
-            // we're at location now
-            if (startTick == -1) {
-                startTick = tick;
-            }
-
             if (tick - startTick > MAX_WAIT_TICKS) {
                 // bail out if it takes too long
                 return true;
+            }
+            
+            // we're at location now
+            if (startTick == -1) {
+                startTick = tick;
             }
 
             List<Integer> rats = getIndicesWithinDistance(piperPos[id][pidx], ratPos, 10);
@@ -158,7 +146,7 @@ public class Player implements pppp.sim.Player {
         }
 
         @Override
-        public PlayerState nextState() {
+        public PlayerState nextState(int pidx) {
             return new DoorState();
         }
 
@@ -250,7 +238,9 @@ public class Player implements pppp.sim.Player {
 
         this.prevPiperPos = new Point[pipers.length][pipers[0].length];
         this.piperVel = new Move[pipers.length][pipers[0].length];
+        this.closest_rat = new Point(0,0);
 
+        
         for (int pid = 0; pid < pipers.length; ++pid) {
             for (int p = 0; p < pipers[pid].length; ++p) {
                 this.prevPiperPos[pid][p] = this.transformPoint(pipers[pid][p]);
@@ -296,17 +286,38 @@ public class Player implements pppp.sim.Player {
             moves[i] = transformMove(m[i]);
         }
     }
-
+    private Point get_closest_rats(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos)
+    {
+    	ArrayList<Double> distances = new ArrayList<Double>();
+    	HashMap<Double, Point> rat_distances = new HashMap<Double, Point>();
+        for(int r = 0; r < ratPos.length; r++)
+        {
+        	Point rat_position = ratPos[r];
+        	double distance = piperPos[id][pidx].distance(rat_position);
+        	rat_distances.put(distance, rat_position);
+        	distances.add(distance);
+        }
+        Collections.sort(distances);
+        //more pipers left than rats, double up on random rat
+        if(ratPos.length < piperPos.length && pidx >= ratPos.length)
+        {
+        	pidx = (int)(Math.random()*ratPos.length);
+        }
+        closest_rat = rat_distances.get(distances.get(pidx));
+        return new Point(closest_rat.x, closest_rat.y);
+    }
+    
     private Move[] play_transformed(int id, int side, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
         // THE ENEMIES GATE IS DOWN!!!
         Move m[] = new Move[piperPos[id].length];
 
         // state machine
+        
         for (int p = 0; p < piperPos[id].length; ++p) {
-            //m[p] = new Move(0, -1, false);
+        	get_closest_rats(p, piperPos, piperVel, pipers_played, ratPos);
             if (states[p].stateComplete(p, piperPos, piperVel, pipers_played, ratPos)) {
                 System.out.print("transitioning piper " + p + " out of state " + states[p]);
-                states[p] = states[p].nextState();
+                states[p] = states[p].nextState(p);
                 System.out.println(" and into " +  states[p]);
             }
             m[p] = states[p].computeMove(p, piperPos, piperVel, pipers_played, ratPos);
