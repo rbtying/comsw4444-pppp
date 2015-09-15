@@ -1,4 +1,4 @@
-package pppp.g0;
+package pppp.g7;
 
 import pppp.sim.Point;
 import pppp.sim.Move;
@@ -7,91 +7,117 @@ import java.util.*;
 
 public class Player implements pppp.sim.Player {
 
-	// see details below
-	private int id = -1;
-	private int side = 0;
-	private int[] pos_index = null;
-	private Point[][] pos = null;
-	private Point[] random_pos = null;
-	private Random gen = new Random();
+    // see details below
+    private int id = -1;
+    private int side = 0;
+    private boolean neg_x;
+    private boolean neg_y;
+    private boolean swap_xy;
 
-	// create move towards specified destination
-	private static Move move(Point src, Point dst, boolean play)
-	{
-		double dx = dst.x - src.x;
-		double dy = dst.y - src.y;
-		double length = Math.sqrt(dx * dx + dy * dy);
-		double limit = play ? 0.1 : 0.5;
-		if (length > limit) {
-			dx = (dx * limit) / length;
-			dy = (dy * limit) / length;
-		}
-		return new Move(dx, dy, play);
-	}
+    private Random gen = new Random();
 
-	// generate point after negating or swapping coordinates
-	private static Point point(double x, double y,
-	                           boolean neg_y, boolean swap_xy)
-	{
-		if (neg_y) y = -y;
-		return swap_xy ? new Point(y, x) : new Point(x, y);
-	}
+    private Point[][] prevPiperPos;
+    private Move[][] piperVel;
 
-	// specify location that the player will alternate between
-	public void init(int id, int side, long turns,
-	                 Point[][] pipers, Point[] rats)
-	{
-		this.id = id;
-		this.side = side;
-		int n_pipers = pipers[id].length;
-		pos = new Point [n_pipers][5];
-		random_pos = new Point [n_pipers];
-		pos_index = new int [n_pipers];
-		for (int p = 0 ; p != n_pipers ; ++p) {
-			// spread out at the door level
-			double door = 0.0;
-			if (n_pipers != 1) door = p * 1.8 / (n_pipers - 1) - 0.9;
-			// pick coordinate based on where the player is
-			boolean neg_y = id == 2 || id == 3;
-			boolean swap  = id == 1 || id == 3;
-			// first and third position is at the door
-			pos[p][0] = pos[p][2] = point(door, side * 0.5, neg_y, swap);
-			// second position is chosen randomly in the rat moving area
-			pos[p][1] = null;
-			// fourth and fifth positions are outside the rat moving area
-			pos[p][3] = point(door * -6, side * 0.5 + 3, neg_y, swap);
-			pos[p][4] = point(door * +6, side * 0.5 + 3, neg_y, swap);
-			// start with first position
-			pos_index[p] = 0;
-		}
-	}
 
-	// return next locations on last argument
-	public void play(Point[][] pipers, boolean[][] pipers_played,
-	                 Point[] rats, Move[] moves)
-	{
-		for (int p = 0 ; p != pipers[id].length ; ++p) {
-			Point src = pipers[id][p];
-			Point dst = pos[p][pos_index[p]];
-			// if null then get random position
-			if (dst == null) dst = random_pos[p];
-			// if position is reached
-			if (Math.abs(src.x - dst.x) < 0.000001 &&
-			    Math.abs(src.y - dst.y) < 0.000001) {
-				// discard random position
-				if (dst == random_pos[p]) random_pos[p] = null;
-				// get next position
-				if (++pos_index[p] == pos[p].length) pos_index[p] = 0;
-				dst = pos[p][pos_index[p]];
-				// generate a new position if random
-				if (dst == null) {
-					double x = (gen.nextDouble() - 0.5) * side * 0.9;
-					double y = (gen.nextDouble() - 0.5) * side * 0.9;
-					random_pos[p] = dst = new Point(x, y);
-				}
-			}
-			// get move towards position
-			moves[p] = move(src, dst, pos_index[p] > 1);
-		}
-	}
+    /**
+     * Note: transformPoint(transformPoint(p)) == p
+     *
+     * @param p point to transform
+     * @return point transformed into unified coordinate system, or back
+     */
+    private Point transformPoint(Point p) {
+        double x = p.x;
+        double y = p.y;
+        if (neg_y) y = -y;
+        if (neg_x) x = -x;
+        return swap_xy ? new Point(y, x) : new Point(x, y);
+    }
+
+    /**
+     * Note: transformMove(transformMove(m)) == m
+     *
+     * @param m move to transform
+     * @return move transformed into unified coordinate system, or back
+     */
+    private Move transformMove(Move m) {
+        double dx = m.dx;
+        double dy = m.dy;
+
+        if (neg_y) dy = -dy;
+        if (neg_x) dx = -dx;
+        return swap_xy ? new Move(-dy, -dx, m.play) : new Move(dx, dy, m.play);
+    }
+
+    // create move towards specified destination
+    private static Move move(Point src, Point dst, boolean play) {
+        double dx = dst.x - src.x;
+        double dy = dst.y - src.y;
+        double length = Math.sqrt(dx * dx + dy * dy);
+        double limit = play ? 0.1 : 0.5;
+        if (length > limit) {
+            dx = (dx * limit) / length;
+            dy = (dy * limit) / length;
+        }
+        return new Move(dx, dy, play);
+    }
+
+    // specify location that the player will alternate between
+    public void init(int id, int side, long turns,
+                     Point[][] pipers, Point[] rats) {
+        this.id = id;
+        this.side = side;
+        this.neg_y = id == 2 || id == 1;
+        this.neg_x = id == 3 || id == 2;
+        this.swap_xy = id == 1 || id == 3;
+
+        this.prevPiperPos = new Point[pipers.length][pipers[0].length];
+        this.piperVel = new Move[pipers.length][pipers[0].length];
+
+        for (int pid = 0; pid < pipers.length; ++pid) {
+            for (int p = 0; p < pipers[pid].length; ++p) {
+                this.prevPiperPos[pid][p] = this.transformPoint(pipers[pid][p]);
+                this.piperVel[pid][p] = new Move(0, 0, false);
+            }
+        }
+    }
+
+    // return next locations on last argument
+    public void play(Point[][] pipers, boolean[][] pipers_played,
+                     Point[] rats, Move[] moves) {
+
+        // transform coordinates
+        Point transformedPiperPos[][] = new Point[pipers.length][pipers[0].length];
+        Point transformedRatPos[] = new Point[rats.length];
+
+        for (int pid = 0; pid < pipers.length; ++pid) {
+            for (int p = 0; p < pipers[pid].length; ++p) {
+                transformedPiperPos[pid][p] = this.transformPoint(pipers[pid][p]);
+                double dx = transformedPiperPos[pid][p].x - prevPiperPos[pid][p].x;
+                double dy = transformedPiperPos[pid][p].y - prevPiperPos[pid][p].y;
+                this.piperVel[pid][p] = new Move(dx, dy, pipers_played[pid][p]);
+                prevPiperPos[pid][p] = transformedPiperPos[pid][p];
+            }
+        }
+
+        // perform computation
+        Move m[] = play_transformed(id, side, transformedPiperPos, piperVel, pipers_played, transformedRatPos);
+
+        // untransform coordinates
+        for (int i = 0; i < m.length; ++i) {
+            moves[i] = transformMove(m[i]);
+        }
+    }
+
+    private static Move[] play_transformed(int id, int side, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
+        // THE ENEMIES GATE IS DOWN!!!
+        Point door = new Point(0, side / 2);
+
+        Move m[] = new Move[piperPos[id].length];
+        for (int p = 0; p < piperPos[id].length; ++p) {
+            // m[p] = new Move(-1, 0, false);
+            m[p] = move(piperPos[id][p], door, false);
+        }
+        return m;
+    }
 }
