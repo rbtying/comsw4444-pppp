@@ -10,23 +10,19 @@ public class Player implements pppp.sim.Player {
     // see details below
     private int id = -1;
     private int side = 0;
-    private boolean neg_x;
-    private boolean neg_y;
-    private boolean swap_xy;
     private long tick;
-
-    private Random gen = new Random();
+    private Util util;
 
     private Point[][] prevPiperPos;
     private Move[][] piperVel;
     private PlayerState[] states;
 
     private interface PlayerState {
-        public abstract PlayerState nextState(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos);
+        PlayerState nextState(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos);
 
-        public abstract Move computeMove(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos);
+        Move computeMove(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos);
 
-        public abstract boolean stateComplete(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos);
+        boolean stateComplete(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos);
     }
 
     private abstract class StopState implements PlayerState {
@@ -56,7 +52,7 @@ public class Player implements pppp.sim.Player {
 
         @Override
         public Move computeMove(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
-        	return move(piperPos[id][pidx], dest, playing);
+        	return util.moveToLoc(piperPos[id][pidx], dest, playing);
         }
 
         @Override
@@ -90,15 +86,8 @@ public class Player implements pppp.sim.Player {
             return new GoToLocationState(closest_rat, false) {
                 @Override
                 public boolean stateComplete(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
-                    List<Integer> rats = getIndicesWithinDistance(piperPos[id][pidx], ratPos, 10);
-                    int numrats = 0;
-                    for (Point rat : ratPos) {
-                        if (rat != null) {
-                            ++numrats;
-                        }
-                    }
-
-                    if (!rats.isEmpty() && numrats < piperPos[pidx].length) {
+                    List<Integer> rats = util.getIndicesWithinDistance(piperPos[id][pidx], ratPos, 10);
+                    if (!rats.isEmpty() && ratPos.length < piperPos[pidx].length) {
                         // there's a rat nearby! force nextstate to be called so we go for that instead
                         return true;
                     } else {
@@ -108,9 +97,9 @@ public class Player implements pppp.sim.Player {
 
                 @Override
                 public PlayerState nextState(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
-                    List<Integer> rats = getIndicesWithinDistance(piperPos[id][pidx], ratPos, 10);
+                    List<Integer> rats = util.getIndicesWithinDistance(piperPos[id][pidx], ratPos, 10);
 
-                    if (rats.isEmpty()) {
+                    if (rats.isEmpty() && ratPos.length < piperPos[id].length) {
                         return new RetrieveClosestRatState();
                     } else {
                         return new DepositState();
@@ -119,7 +108,6 @@ public class Player implements pppp.sim.Player {
             };
         }
     }
-
 
     private class RetrieveMostRatsState implements PlayerState {
 
@@ -132,19 +120,19 @@ public class Player implements pppp.sim.Player {
 
         @Override
         public Move computeMove(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
-            List<Integer> pos = getIndicesWithinDistance(target, ratPos, 10.0);
+            List<Integer> pos = util.getIndicesWithinDistance(target, ratPos, 10.0);
             if (pos.size() <= max_rats * .75) {
                 update_most_rats(pidx, piperPos, piperVel, pipers_played, ratPos);
             }
             counter = (counter + 1); // % 10;
-            return move(piperPos[id][pidx], target, false);
+            return util.moveToLoc(piperPos[id][pidx], target, false);
         }
 
         @Override
         public boolean stateComplete(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
-            List<Integer> pos = getIndicesWithinDistance(piperPos[id][pidx], ratPos, 10.0);
-            List<Integer> pos2 = getIndicesWithinDistance(target, ratPos, 10.0);
-            return pos.size() >= pos2.size() - 1;
+            List<Integer> pos = util.getIndicesWithinDistance(piperPos[id][pidx], ratPos, 10.0);
+            List<Integer> pos2 = util.getIndicesWithinDistance(target, ratPos, 10.0);
+            return pos.size() >= pos2.size();// - 1;
         }
 
         @Override
@@ -155,7 +143,7 @@ public class Player implements pppp.sim.Player {
         private void update_most_rats(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos)
         {
             max_rats = 1;
-            target = ratPos[(int)(Math.random()*ratPos.length)];
+            target = ratPos[(int)(Math.random() * ratPos.length)];
 
             ArrayList<Point> realRatPos = new ArrayList<>();
             for (Point p : ratPos) {
@@ -195,7 +183,6 @@ public class Player implements pppp.sim.Player {
 
         }
 
-
         private Point getCenterByRadiusAndPoints(Point a, Point b, double radius) {
 
             Point mid = new Point((a.x + b.x) / 2, (a.y + b.y) / 2);
@@ -210,7 +197,6 @@ public class Player implements pppp.sim.Player {
         }
 
     }
-
 
     private class SweepState extends GoToLocationState {
 
@@ -274,7 +260,7 @@ public class Player implements pppp.sim.Player {
         public boolean stateComplete(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
             boolean atLoc = super.stateComplete(pidx, piperPos, piperVel, pipers_played, ratPos);
 
-            List<Integer> rats = getIndicesWithinDistance(piperPos[id][pidx], ratPos, 10);
+            List<Integer> rats = util.getIndicesWithinDistance(piperPos[id][pidx], ratPos, 10);
             this.numRatsAtLastCheck = rats.size();
             if (rats.isEmpty()) {
                 return true;
@@ -316,75 +302,7 @@ public class Player implements pppp.sim.Player {
         }
     }
 
-    /**
-     * Finds indices of points within a given distance
-     * @param pos the position to compute from
-     * @param otherPos the array of other positions
-     * @param distance the maximum distance to compare
-     * @return list of indices of points within distance.
-     */
-    private List<Integer> getIndicesWithinDistance(Point pos, Point[] otherPos, double distance) {
-        List<Integer> indices = new LinkedList<Integer>();
-        for (int i = 0; i < otherPos.length; ++i) {
-            if (otherPos[i] != null && pos.distance(otherPos[i]) < distance) {
-                indices.add(i);
-            }
-        }
-        return indices;
-    }
 
-
-    /**
-     * Note: transformPoint(transformPoint(p)) == p
-     *
-     * @param p point to transform
-     * @return point transformed into unified coordinate system, or back
-     */
-    private Point transformPoint(Point p) {
-        double x = p.x;
-        double y = p.y;
-        if (neg_y) y = -y;
-        if (neg_x) x = -x;
-        return swap_xy ? new Point(y, x) : new Point(x, y);
-    }
-
-    /**
-     * Note: transformMove(transformMove(m)) == m
-     *
-     * @param m move to transform
-     * @return move transformed into unified coordinate system, or back
-     */
-    private Move transformMove(Move m) {
-        double dx = m.dx;
-        double dy = m.dy;
-
-        if (neg_y) dy = -dy;
-        if (neg_x) dx = -dx;
-        return swap_xy ? new Move(-dy, -dx, m.play) : new Move(dx, dy, m.play);
-    }
-
-    /**
-     * Constrains point to within boundaries of walls
-     *
-     * @param p point to constrain
-     * @return constrained point (potentially the same point)
-     */
-    private Point constrainPoint(Point p) {
-        return p;
-    }
-
-    // create move towards specified destination
-    private static Move move(Point src, Point dst, boolean play) {
-        double dx = dst.x - src.x;
-        double dy = dst.y - src.y;
-        double length = Math.sqrt(dx * dx + dy * dy);
-        double limit = play ? 0.1 : 0.5;
-        if (length > limit) {
-            dx = (dx * limit) / length;
-            dy = (dy * limit) / length;
-        }
-        return new Move(dx, dy, play);
-    }
 
     // specify location that the player will alternate between
     public void init(int id, int side, long turns,
@@ -392,9 +310,7 @@ public class Player implements pppp.sim.Player {
         this.tick = 0;
         this.id = id;
         this.side = side;
-        this.neg_y = id == 2 || id == 1;
-        this.neg_x = id == 3 || id == 2;
-        this.swap_xy = id == 1 || id == 3;
+        util = new Util(id == 3 || id == 2, id == 2 || id == 1, id == 1 || id == 3);
 
         this.prevPiperPos = new Point[pipers.length][pipers[0].length];
         this.piperVel = new Move[pipers.length][pipers[0].length];
@@ -402,14 +318,19 @@ public class Player implements pppp.sim.Player {
         
         for (int pid = 0; pid < pipers.length; ++pid) {
             for (int p = 0; p < pipers[pid].length; ++p) {
-                this.prevPiperPos[pid][p] = this.transformPoint(pipers[pid][p]);
+                this.prevPiperPos[pid][p] = util.transformPoint(pipers[pid][p]);
                 this.piperVel[pid][p] = new Move(0, 0, false);
             }
         }
 
         this.states = new PlayerState[pipers.length];
         for (int i = 0; i < pipers.length; ++i) {
-            this.states[i] = new DoorState();
+            this.states[i] = new DoorState() {
+                @Override
+                public PlayerState nextState(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
+                    return new SweepState();
+                }
+            };
         }
     }
 
@@ -425,7 +346,7 @@ public class Player implements pppp.sim.Player {
 
         for (int pid = 0; pid < pipers.length; ++pid) {
             for (int p = 0; p < pipers[pid].length; ++p) {
-                transformedPiperPos[pid][p] = this.transformPoint(pipers[pid][p]);
+                transformedPiperPos[pid][p] = util.transformPoint(pipers[pid][p]);
                 double dx = transformedPiperPos[pid][p].x - prevPiperPos[pid][p].x;
                 double dy = transformedPiperPos[pid][p].y - prevPiperPos[pid][p].y;
                 this.piperVel[pid][p] = new Move(dx, dy, pipers_played[pid][p]);
@@ -434,7 +355,7 @@ public class Player implements pppp.sim.Player {
         }
 
         for (int r = 0; r < rats.length; ++r) {
-            transformedRatPos[r] = transformPoint(rats[r]);
+            transformedRatPos[r] = util.transformPoint(rats[r]);
         }
 
         // perform computation
@@ -442,7 +363,7 @@ public class Player implements pppp.sim.Player {
 
         // untransform coordinates
         for (int i = 0; i < m.length; ++i) {
-            moves[i] = transformMove(m[i]);
+            moves[i] = util.transformMove(m[i]);
         }
     }
 
