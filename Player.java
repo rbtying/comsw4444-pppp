@@ -29,6 +29,21 @@ public class Player implements pppp.sim.Player {
         public abstract boolean stateComplete(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos);
     }
 
+    private abstract class StopState implements PlayerState {
+        public int iterations;
+        public boolean playing;
+
+        public Move computeMove(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
+            iterations--;
+            return new Move(0, 0, playing);
+        }
+
+        public boolean stateComplete(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
+            return iterations <= 0;
+        }
+
+    }
+
     private abstract class GoToLocationState implements PlayerState {
         public static final double TOLERANCE = 0.05;
         public Point dest;
@@ -62,7 +77,8 @@ public class Player implements pppp.sim.Player {
 
         @Override
         public PlayerState nextState(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
-            return new SweepState();
+            // return new SweepState();
+            return new RetrieveMostRatsState();
         }
     }
 
@@ -103,6 +119,98 @@ public class Player implements pppp.sim.Player {
             };
         }
     }
+
+
+    private class RetrieveMostRatsState implements PlayerState {
+
+        public static final double TOLERANCE = 0.05;
+
+        private int max_rats = 10000000; // Force Update
+        private Point target = new Point(0, 0);
+
+        int counter = 0;
+
+        @Override
+        public Move computeMove(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
+            List<Integer> pos = getIndicesWithinDistance(target, ratPos, 10.0);
+            if (pos.size() <= max_rats * .75) {
+                update_most_rats(pidx, piperPos, piperVel, pipers_played, ratPos);
+            }
+            counter = (counter + 1); // % 10;
+            return move(piperPos[id][pidx], target, false);
+        }
+
+        @Override
+        public boolean stateComplete(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
+            List<Integer> pos = getIndicesWithinDistance(piperPos[id][pidx], ratPos, 10.0);
+            List<Integer> pos2 = getIndicesWithinDistance(target, ratPos, 10.0);
+            return pos.size() >= pos2.size() - 1;
+        }
+
+        @Override
+        public PlayerState nextState(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
+            return new DepositState();
+        }
+
+        private void update_most_rats(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos)
+        {
+            max_rats = 1;
+            target = ratPos[(int)(Math.random()*ratPos.length)];
+
+            ArrayList<Point> realRatPos = new ArrayList<>();
+            for (Point p : ratPos) {
+                boolean ok = true;
+                for (int i = 0; i < piperPos[id].length; i++) {
+                    if (i != pidx && pipers_played[id][i]) {
+                        if (piperPos[id][i].distance(p) <= 10) {
+                            ok = false;
+                        }
+                    }
+                }
+                if (ok) {
+                    realRatPos.add(p);
+                }
+            }
+
+            for (int i = 0; i < realRatPos.size(); i++) {
+                for (int j = i + 1; j < realRatPos.size(); j++) {
+                    if (ratPos[i].distance(ratPos[j]) <= 10 * 2) {
+                        Point p1 = getCenterByRadiusAndPoints(ratPos[i], ratPos[j], 10);
+                        Point p2 = getCenterByRadiusAndPoints(ratPos[j], ratPos[i], 10);
+                        int s1 = 0, s2 = 0;
+                        for (Point k : realRatPos) {
+                            if (k.distance(p1) <= 10) s1++;
+                            if (k.distance(p2) <= 10) s2++;
+                        }
+                        if (s1 > max_rats) {
+                            max_rats = s1; target = p1;
+                        }
+                        if (s2 > max_rats) {
+                            max_rats = s2; target = p2;
+                        }
+
+                    }
+                }
+            }
+
+        }
+
+
+        private Point getCenterByRadiusAndPoints(Point a, Point b, double radius) {
+
+            Point mid = new Point((a.x + b.x) / 2, (a.y + b.y) / 2);
+            double angleMidToCenter = Math.atan2(b.y - a.y, b.x - a.x) + Math.PI / 2;
+
+            double distAToB = a.distance(b);
+            double distMidToCenter = Math.sqrt(radius * radius - distAToB * distAToB);
+
+            return new Point(mid.x + distMidToCenter * Math.cos(angleMidToCenter),
+                    mid.y + distMidToCenter * Math.sin(angleMidToCenter));
+
+        }
+
+    }
+
 
     private class SweepState extends GoToLocationState {
 
@@ -149,7 +257,7 @@ public class Player implements pppp.sim.Player {
 
     private class DepositState extends GoToLocationState {
         // max rat distance divided by max rat speed
-        private static final double MAX_WAIT_TICKS = 10 / 0.01;
+        private static final double MAX_WAIT_TICKS = 2 * 10 / 0.01;
 
         private long startTick;
         private int numRatsAtLastCheck;
@@ -166,6 +274,12 @@ public class Player implements pppp.sim.Player {
         public boolean stateComplete(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
             boolean atLoc = super.stateComplete(pidx, piperPos, piperVel, pipers_played, ratPos);
 
+            List<Integer> rats = getIndicesWithinDistance(piperPos[id][pidx], ratPos, 10);
+            this.numRatsAtLastCheck = rats.size();
+            if (rats.isEmpty()) {
+                return true;
+            }
+
             if (!atLoc) {
                 return false;
             }
@@ -181,17 +295,14 @@ public class Player implements pppp.sim.Player {
                 // bail out if it takes too long
                 return true;
             }
-            
+
             // we're at location now
             if (startTick == -1) {
                 startTick = tick;
             }
 
-            List<Integer> rats = getIndicesWithinDistance(piperPos[id][pidx], ratPos, 10);
+            return false;
 
-            this.numRatsAtLastCheck = rats.size();
-
-            return rats.isEmpty();
         }
 
         @Override
@@ -353,7 +464,8 @@ public class Player implements pppp.sim.Player {
         }
         return rat_distances.get(distances.get(pidx));
     }
-    
+
+
     private Move[] play_transformed(int id, int side, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos) {
         // THE ENEMIES GATE IS DOWN!!!
         Move m[] = new Move[piperPos[id].length];
