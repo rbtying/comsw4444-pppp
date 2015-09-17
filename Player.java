@@ -1,6 +1,5 @@
 package pppp.g7;
 
-import com.sun.org.apache.bcel.internal.generic.GOTO;
 import pppp.sim.Point;
 import pppp.sim.Move;
 
