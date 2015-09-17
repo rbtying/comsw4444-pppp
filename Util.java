@@ -1,10 +1,10 @@
 package pppp.g7;
 
+import com.sun.media.jfxmedia.events.PlayerStateEvent;
 import pppp.sim.Move;
 import pppp.sim.Point;
 
-import java.util.LinkedList;
-import java.util.List;
+import java.util.*;
 
 /**
  * Created by rbtying on 9/16/15.
@@ -77,4 +77,66 @@ public class Util {
         }
         return new Move(dx, dy, play);
     }
+
+    public boolean isInState(Player.PlayerState pstate, Player.PlayerState desiredState) {
+        return pstate.getClass() == desiredState.getClass() && pstate.sameStateAs(desiredState);
+    }
+
+    public boolean groupIsInState(List<Integer> group, Player.PlayerState states[], Player.PlayerState desiredState) {
+        if (group.size() <= 1) {
+            return true;
+        }
+
+        for (Integer p : group) {
+            if (!isInState(states[p], desiredState)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public int getClosestRat(int id, Player.PlayerState states[], int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played, Point[] ratPos, int depth)
+    {
+        ArrayList<Double> distances = new ArrayList<>();
+        HashMap<Double, Integer> rat_lut = new HashMap<>();
+
+        for (int i = 0; i < ratPos.length; ++i) {
+            Point rat_position = ratPos[i];
+            double distance = piperPos[id][pidx].distance(rat_position);
+            int localdepth = 0;
+
+            for (int j = 0; j < piperPos[id].length; ++j) {
+                if (pidx == j) {
+                    continue;
+                }
+
+                boolean is_captured = (states[j] instanceof Player.DepositState) && piperPos[id][j].distance(rat_position) <= 10+1e-5;
+                boolean is_target = false;
+
+                if (states[j] instanceof Player.RetrieveClosestRatState) {
+                    if (((Player.RetrieveClosestRatState) states[j]).targetRat == i) {
+                        is_target = true;
+                    }
+                }
+
+
+                if (is_captured || is_target) {
+                    ++localdepth;
+                }
+            }
+            rat_lut.put(distance, i);
+            if (localdepth < depth) {
+                distances.add(distance);
+            }
+        }
+
+        Collections.sort(distances);
+
+        if (distances.isEmpty()) {
+            return pidx % ratPos.length;
+        } else {
+            return rat_lut.get(distances.get(0));
+        }
+    }
+
 }
