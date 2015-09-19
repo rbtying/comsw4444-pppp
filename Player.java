@@ -165,9 +165,9 @@ public class Player implements pppp.sim.Player {
             double rat_density = ratPos.length * 1.0 / (side * side);
             double player_density = piperPos[id].length * 1.0 / (side * side);
 
-            if (rat_density > 0.005) {
+            if (rat_density > 0.0005) {
                 return new SweepState();
-            } else if ((rat_density / player_density) >= 3) {
+            } else if ((rat_density / player_density) >= 2.5) {
                 if (pidx < 2) {
                     return new RetrieveMostRatsState();
                 } else {
@@ -373,7 +373,7 @@ public class Player implements pppp.sim.Player {
             int max_pidx = piperPos[id].length;
 
             // group into sets of 2
-            this.dest = new Point(side * ((pidx + 1) * 1.0 / (max_pidx + 1)) - side / 2, -side / 4);
+            this.dest = new Point(side * ((pidx + 1) * 1.0 / (max_pidx + 1)) - side / 2, -side / 5.5);
             return super.stateComplete(pidx, piperPos, piperVel, pipers_played, ratPos);
         }
 
