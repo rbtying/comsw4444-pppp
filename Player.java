@@ -24,6 +24,7 @@ public class Player implements pppp.sim.Player {
     // specify location that the player will alternate between
     public void init(int id, int side, long turns,
                      Point[][] pipers, Point[] rats) {
+    
         this.tick = 0;
         this.id = id;
         this.side = side;
@@ -165,7 +166,7 @@ public class Player implements pppp.sim.Player {
             double rat_density = ratPos.length * 1.0 / (side * side);
             double player_density = piperPos[id].length * 1.0 / (side * side);
 
-            if (rat_density > 0.0005) {
+            if (rat_density > 0.003) {
                 return new SweepState();
             } else if ((rat_density / player_density) >= 2.5) {
                 if (pidx < 2) {
@@ -388,12 +389,7 @@ public class Player implements pppp.sim.Player {
                         @Override
                         public PlayerState nextState(int pidx, Point[][] piperPos, Move[][] piperVel,
                                                      boolean[][] pipers_played, Point[] ratPos) {
-                            return new DepositState() {
-                                public PlayerState nextState(int pidx, Point[][] piperPos, Move[][] piperVel,
-                                                             boolean[][] pipers_played, Point[] ratPos) {
-                                    return new RetrieveClosestRatState();
-                                }
-                            };
+                            return new DepositState();
                         }
 
                         @Override
@@ -452,6 +448,15 @@ public class Player implements pppp.sim.Player {
             }
             group = groupLookup.get(pidx);
             List<Integer> l = groupReverseLookup.get(group);
+
+            // Abort if any is in non-sweep states
+            for (Integer p : l) {
+                if (states[p].getClass().equals(RetrieveClosestRatState.class) ||
+                        states[p].getClass().equals(RetrieveMostRatsState.class)) {
+                    return true;
+                }
+            }
+
             boolean shouldGo = util.groupIsInState(l, states, this);
             if (shouldGo) {
                 for (Integer i : l) {
