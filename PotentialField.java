@@ -19,12 +19,14 @@ public class PotentialField {
     private Point testPoint;
     private boolean willPlay;
     private Util u;
+    private int side;
 
-    public PotentialField(Util u, int id, int pidx, boolean willPlay, Point piperPos[][], Move piperVel[][], boolean pipersPlaying[][], Point ratPos[]) {
+    public PotentialField(Util u, int side, int id, int pidx, boolean willPlay, Point piperPos[][], Move piperVel[][], boolean pipersPlaying[][], Point ratPos[]) {
         int initial_size = piperPos.length * piperPos[id].length + ratPos.length;
         points = new ArrayList<>(initial_size);
         charges = new ArrayList<>(initial_size);
         testPoint = piperPos[id][pidx];
+        this.side = side;
         this.willPlay = willPlay;
         this.u = u;
 
@@ -82,20 +84,20 @@ public class PotentialField {
     public void addFriendlyPiper(Point loc, boolean playing) {
         if (playing) {
             // ok to go towards friendly playing
-            addPotential(loc, 0.5);
+            addPotential(loc, -1.0);
         } else {
             // go far away from friendly non-playing
-            addPotential(loc, 0.1);
+            addPotential(loc, 4.0);
         }
     }
 
     public void addEnemyPiper(Point loc, boolean playing) {
         if (playing) {
             // try to avoid enemy playing
-            addPotential(loc, 5.0);
+            addPotential(loc, 8.0);
         } else {
             // try less hard to avoid enemy non-playing
-            addPotential(loc, 2.0);
+            addPotential(loc, 3.0);
         }
 
     }
@@ -103,15 +105,15 @@ public class PotentialField {
     public void addRat(Point loc, boolean listeningToFriendly, boolean listeningToEnemy) {
         if (listeningToEnemy && listeningToFriendly) {
             // reinforce!!
-            addPotential(loc, -10.0);
+            addPotential(loc, -50.0);
         } else if (listeningToEnemy) {
             // penalize enemy areas with lots of rats; probably protected
-            addPotential(loc, 1.0);
+            addPotential(loc, -4.0);
         } else if (listeningToFriendly) {
-            addPotential(loc, -0.5);
+            addPotential(loc, -2.0);
         } else {
             // go toward rats that are unclaimed
-            addPotential(loc, -1.0);
+            addPotential(loc, -7.0);
         }
     }
 
@@ -128,11 +130,9 @@ public class PotentialField {
             potential += charge * charges.get(i) / r;
         }
 
-        // avoid sides
-        potential += loc.x * loc.x * 0.0005;
-        if (loc.y < 0) {
-            potential += loc.y * loc.y * 0.01;
-        }
+        potential += loc.x * loc.x * 0.010;
+        potential += Math.pow(((side / 2) - loc.y), 2) * 0.0025;
+
         return potential;
     }
 
