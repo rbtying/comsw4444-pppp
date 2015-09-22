@@ -374,7 +374,7 @@ public class Player implements pppp.sim.Player {
             int max_pidx = piperPos[id].length;
 
             // group into sets of 2
-            this.dest = new Point(side * ((pidx + 1) * 1.0 / (max_pidx + 1)) - side / 2, -side / 5.5);
+            this.dest = new Point(side * ((pidx + 1) * 1.0 / (max_pidx + 1)) - side / 2, - side / 10);
             return super.stateComplete(pidx, piperPos, piperVel, pipers_played, ratPos);
         }
 
@@ -385,6 +385,7 @@ public class Player implements pppp.sim.Player {
                 @Override
                 public PlayerState nextState(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played,
                                              Point[] ratPos) {
+                    Point destination = new Point(piperPos[id][pidx].x, side / 2);
                     return new PlayerState() {
                         @Override
                         public PlayerState nextState(int pidx, Point[][] piperPos, Move[][] piperVel,
@@ -395,13 +396,21 @@ public class Player implements pppp.sim.Player {
                         @Override
                         public Move computeMove(int pidx, Point[][] piperPos, Move[][] piperVel,
                                                 boolean[][] pipers_played, Point[] ratPos) {
-                            return new Move(0, 0.1, true);
+                            PotentialField pf = new PotentialField(util, id, pidx, true, piperPos, piperVel, pipers_played, ratPos);
+
+                            // add in a destination point
+                            pf.addPotential(destination, -40.0);
+
+                            Point next = pf.computeMove();
+                            System.out.println(String.format("%d to (%f, %f) with potential %f", pidx, next.x, next.y, pf.getPotential(next, 1.0)));
+
+                            return Util.moveToLoc(piperPos[id][pidx], next, true);
                         }
 
                         @Override
                         public boolean stateComplete(int pidx, Point[][] piperPos, Move[][] piperVel,
                                                      boolean[][] pipers_played, Point[] ratPos) {
-                            return side / 2 - piperPos[id][pidx].y < 10;
+                            return (side / 2 - piperPos[id][pidx].y) < 0.2 * (side / 2);
                         }
 
                         @Override
