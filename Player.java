@@ -24,7 +24,7 @@ public class Player implements pppp.sim.Player {
     // specify location that the player will alternate between
     public void init(int id, int side, long turns,
                      Point[][] pipers, Point[] rats) {
-    
+
         this.tick = 0;
         this.id = id;
         this.side = side;
@@ -93,7 +93,7 @@ public class Player implements pppp.sim.Player {
     }
 
     private PlayerState nextStrategicState(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played,
-                          Point[] ratPos) {
+                                           Point[] ratPos) {
         double rat_density = ratPos.length * 1.0 / (side * side);
         double player_density = piperPos[id].length * 1.0 / (side * side);
 
@@ -108,10 +108,14 @@ public class Player implements pppp.sim.Player {
             counter[x][y]++;
         }
 
+        int max_rats = 0;
         double mean = ratPos.length * 1.0 / bins * bins;
         double var = 0;
         for (int i = 0; i < counter.length; ++i) {
             for (int j = 0; j < counter[i].length; ++j) {
+                if (counter[i][j] > max_rats) {
+                    max_rats = counter[i][j];
+                }
                 var += Math.pow((counter[i][j] - mean), 2) / (bins * bins);
             }
         }
@@ -157,7 +161,7 @@ public class Player implements pppp.sim.Player {
 
         if (std > 30) {
             return new SweepState();
-        } else if ((rat_density / player_density) >= 2.5) {
+        } else if ((rat_density / player_density) >= 1.0) {
             if (pidx < piperPos[id].length * frac_unattached + 0.5) {
                 return new RetrieveClosestRatState();
             } else {
@@ -444,7 +448,7 @@ public class Player implements pppp.sim.Player {
             int max_pidx = piperPos[id].length;
 
             // group into sets of 2
-            this.dest = new Point(side * ((pidx + 1) * 1.0 / (max_pidx + 1)) - side / 2, -side/10);
+            this.dest = new Point(side * ((pidx + 1) * 1.0 / (max_pidx + 1)) - side / 2, -side / 10);
             return super.stateComplete(pidx, piperPos, piperVel, pipers_played, ratPos);
         }
 
@@ -452,6 +456,7 @@ public class Player implements pppp.sim.Player {
         public PlayerState nextState(int pidx, Point[][] piperPos, Move[][] piperVel, boolean[][] pipers_played,
                                      Point[] ratPos) {
             Point destination = new Point(0, side / 2);
+            long endTime = tick + (long)(side / 0.1 * 4);
             return new PlayerState() {
                 @Override
                 public PlayerState nextState(int pidx, Point[][] piperPos, Move[][] piperVel,
@@ -475,18 +480,18 @@ public class Player implements pppp.sim.Player {
                 @Override
                 public boolean stateComplete(int pidx, Point[][] piperPos, Move[][] piperVel,
                                              boolean[][] pipers_played, Point[] ratPos) {
-                    return (side / 2 - piperPos[id][pidx].y) < 0.2 * (side / 2);
+                    return (tick > endTime) || (side / 2 - piperPos[id][pidx].y) < 0.2 * (side / 2);
                 }
 
                 @Override
                 public boolean sameStateAs(PlayerState other) {
-                                                            return true;
-                                                                        }
+                    return true;
+                }
 
                 @Override
                 public String toString() {
-                                       return "MovingUpState";
-                                                              }
+                    return "MovingUpState";
+                }
             };
         }
 
