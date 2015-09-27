@@ -161,7 +161,7 @@ public class Player implements pppp.sim.Player {
 
         if (std > 30) {
             return new SweepState();
-        } else if ((rat_density / player_density) >= 1.0) {
+        } else if ((rat_density / player_density) >= 1.5) {
             if (pidx < piperPos[id].length * frac_unattached + 0.5) {
                 return new RetrieveClosestRatState();
             } else {
@@ -512,7 +512,12 @@ public class Player implements pppp.sim.Player {
             int max_pidx = piperPos[id].length;
 
             // group into sets of 2
-            this.dest = new Point(side * ((pidx + 1) * 1.0 / (max_pidx + 1)) - side / 2, -side / 10);
+            double radius = side/3.0;
+            double angle_increment = Math.PI / (max_pidx + 3.0);
+            double angle = angle_increment * (pidx + 2);
+            double y_value = Math.sin(angle)* radius - side/5.0;
+            double x_value = Math.cos(angle)*radius;
+            this.dest = new Point(x_value, -y_value);
             return super.stateComplete(pidx, piperPos, piperVel, pipers_played, ratPos);
         }
 
