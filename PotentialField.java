@@ -13,6 +13,7 @@ import java.util.Set;
  */
 public class PotentialField {
     private static final double TESTPOINT_CHARGE = 1.0;
+    private static final double IGNORE_RAT_DISTANCE = 75.0;
 
     private ArrayList<Point> points;
     private ArrayList<Double> charges;
@@ -33,7 +34,13 @@ public class PotentialField {
         initializePotentialField(id, pidx, piperPos, pipersPlaying, ratPos);
     }
 
-    public void initializePotentialField(int id, int pidx, Point piperPos[][], boolean pipersPlaying[][], Point ratPos[]) {
+    public void initializePotentialField(int id, int pidx, Point piperPos[][], boolean pipersPlaying[][], Point ratPosAll[]) {
+
+        List<Integer> rats = u.getIndicesWithinDistance(piperPos[id][pidx], ratPosAll, IGNORE_RAT_DISTANCE);
+        Point[] ratPos = new Point[rats.size()];
+        for (int i = 0; i < rats.size(); ++i) {
+            ratPos[i] = ratPosAll[rats.get(i)];
+        }
 
         boolean ratInFriendlyZone[] = new boolean[ratPos.length];
         boolean ratInEnemyZone[] = new boolean[ratPos.length];
