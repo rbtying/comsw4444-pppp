@@ -14,6 +14,7 @@ import java.util.Set;
 public class PotentialField {
     private static final double TESTPOINT_CHARGE = 1.0;
     private static final double IGNORE_RAT_DISTANCE = 75.0;
+    private static final double IGNORE_PIPER_DISTANCE = 85.0;
 
     private ArrayList<Point> points;
     private ArrayList<Double> charges;
@@ -58,12 +59,14 @@ public class PotentialField {
                 addFriendlyPiper(piperPos[id][i], pipersPlaying[id][i]);
             }
 
-            List<Integer> nearby = u.getIndicesWithinDistance(piperPos[id][i], ratPos, 10);
-            for (int j : nearby) {
-                if (i == pidx) {
-                    ratInMyZone[j] = true;
-                } else {
-                    ratInFriendlyZone[j] = true;
+            if (piperPos[id][i].distance(piperPos[id][pidx]) <= IGNORE_PIPER_DISTANCE) {
+                List<Integer> nearby = u.getIndicesWithinDistance(piperPos[id][i], ratPos, 10);
+                for (int j : nearby) {
+                    if (i == pidx) {
+                        ratInMyZone[j] = true;
+                    } else {
+                        ratInFriendlyZone[j] = true;
+                    }
                 }
             }
         }
@@ -72,11 +75,15 @@ public class PotentialField {
             if (e == id) {
                 continue;
             }
+
+            // Only care about enemy that are close
             for (int i = 0; i < piperPos[e].length; ++i) {
                 addEnemyPiper(piperPos[e][i], pipersPlaying[e][i]);
-                List<Integer> nearby = u.getIndicesWithinDistance(piperPos[e][i], ratPos, 10);
-                for (int j : nearby) {
-                    ratInEnemyZone[j] = true;
+                if (piperPos[e][i].distance(piperPos[id][pidx]) <= IGNORE_PIPER_DISTANCE) {
+                    List<Integer> nearby = u.getIndicesWithinDistance(piperPos[e][i], ratPos, 10);
+                    for (int j : nearby) {
+                        ratInEnemyZone[j] = true;
+                    }
                 }
             }
         }
