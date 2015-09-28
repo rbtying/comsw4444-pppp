@@ -536,12 +536,14 @@ public class Player implements pppp.sim.Player {
                 @Override
                 public Move computeMove(int pidx, Point[][] piperPos, Move[][] piperVel,
                                         boolean[][] pipers_played, Point[] ratPos) {
+//                    long ntime = System.nanoTime();
                     PotentialField pf = new PotentialField(util, side, id, pidx, true, piperPos, piperVel, pipers_played, ratPos);
 
                     // add in a destination point
                     pf.addPotential(destination, -400.0);
 
                     Point next = pf.computeMove();
+//                    System.out.println((System.nanoTime() - ntime) * 1.0e-9);
 
                     return Util.moveToLoc(piperPos[id][pidx], next, true);
                 }

@@ -4,9 +4,7 @@ import pppp.sim.Move;
 import pppp.sim.Point;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Created by rbtying on 9/22/15.
@@ -73,6 +71,9 @@ public class PotentialField {
                 continue;
             }
             for (int i = 0; i < piperPos[e].length; ++i) {
+                if (piperPos[e][i].distance(testPoint) > IGNORE_RAT_DISTANCE + 10) {
+                    continue;
+                }
                 addEnemyPiper(piperPos[e][i], pipersPlaying[e][i]);
                 List<Integer> nearby = u.getIndicesWithinDistance(piperPos[e][i], ratPos, 10);
                 for (int j : nearby) {
@@ -91,20 +92,20 @@ public class PotentialField {
     public void addFriendlyPiper(Point loc, boolean playing) {
         if (playing) {
             // ok to go towards friendly playing
-            addPotential(loc, -1.0);
+            addPotential(loc, 5.0);
         } else {
             // go far away from friendly non-playing
-            addPotential(loc, 4.0);
+            addPotential(loc, 10.0);
         }
     }
 
     public void addEnemyPiper(Point loc, boolean playing) {
         if (playing) {
             // try to avoid enemy playing
-            addPotential(loc, 8.0);
+            addPotential(loc, 16.0);
         } else {
             // try less hard to avoid enemy non-playing
-            addPotential(loc, 3.0);
+            addPotential(loc, 7.0);
         }
 
     }
@@ -112,10 +113,9 @@ public class PotentialField {
     public void addRat(Point loc, boolean listeningToFriendly, boolean listeningToEnemy) {
         if (listeningToEnemy && listeningToFriendly) {
             // reinforce!!
-            addPotential(loc, -50.0);
+            addPotential(loc, -100.0);
         } else if (listeningToEnemy) {
-            // penalize enemy areas with lots of rats; probably protected
-            addPotential(loc, -4.0);
+            addPotential(loc, -7.0);
         } else if (listeningToFriendly) {
             addPotential(loc, -2.0);
         } else {
