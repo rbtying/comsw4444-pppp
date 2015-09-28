@@ -57,7 +57,7 @@ public class PotentialField {
                 addFriendlyPiper(piperPos[id][i], pipersPlaying[id][i]);
             }
 
-            if (piperPos[id][i].distance(piperPos[id][pidx]) <= IGNORE_PIPER_DISTANCE) {
+            if (piperPos[id][i].distance(testPoint) <= IGNORE_PIPER_DISTANCE) {
                 List<Integer> nearby = u.getIndicesWithinDistance(piperPos[id][i], ratPos, 10);
                 for (int j : nearby) {
                     if (i == pidx) {
@@ -76,11 +76,8 @@ public class PotentialField {
 
             // Only care about enemy that are close
             for (int i = 0; i < piperPos[e].length; ++i) {
-                if (piperPos[e][i].distance(testPoint) > IGNORE_RAT_DISTANCE + 10) {
-                    continue;
-                }
                 addEnemyPiper(piperPos[e][i], pipersPlaying[e][i]);
-                if (piperPos[e][i].distance(piperPos[id][pidx]) <= IGNORE_PIPER_DISTANCE) {
+                if (piperPos[e][i].distance(testPoint) <= IGNORE_PIPER_DISTANCE) {
                     List<Integer> nearby = u.getIndicesWithinDistance(piperPos[e][i], ratPos, 10);
                     for (int j : nearby) {
                         ratInEnemyZone[j] = true;
